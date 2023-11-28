@@ -1,0 +1,7 @@
+#ifndef ADDRESS_H_
+# define ADDRESS_H_
+
+# define KERNEL_BASE_ADDRESS	0xC000000
+# define KERNEL_END_ADDRESS	0xC040000
+
+#endif /* !ADDRESS_H_ */
