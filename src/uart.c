@@ -30,9 +30,7 @@ void		uart_init(const uint16_t addr)
 		return ;
 	}
 
-
 	uart_addr = addr;
-
 	outb(uart_addr + 1, 0x01);
 	outb(uart_addr + 2, 0x00);
 	outb(uart_addr + 3, 0x80);

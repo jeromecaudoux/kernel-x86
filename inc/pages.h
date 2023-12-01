@@ -21,11 +21,36 @@ typedef unsigned int phys_t;
 #define FRAMES_DIRECTORY_INDEX (PAGE_TABLES_DIRECTORY_INDEX + 1)
 
 #define PAGE_TABLES_START_VADDR ((t_page_table_entry *)(PAGE_TABLES_DIRECTORY_INDEX << 22))
+#define FRAMES_START_VADDR ((struct frame *)(FRAMES_DIRECTORY_INDEX << 22))
+#define FRAMES_START_PADDR ((struct frame *) 0x00800000)
 
 #define PDE_4MB_ADDR_HIGH(addr) ((addr) >> 22)
 #define PDE_ADDR_HIGH(addr) ((addr) >> 12)
 #define PTE_ADDR_HIGH(addr) ((addr) >> 12)
 #define PDE_PTADDR_TO_VADDR(addr) (SYSTEM_ADDR_BASE + ((addr) << 12))
+#define VADDR_TO_PTADDR(addr) ((unsigned int) addr - (unsigned int) SYSTEM_ADDR_BASE)
+
+typedef struct page_fault_handler {
+    // 0 The fault was caused by a non-present page.
+    // 1 The fault was caused by a page-level protection violation.
+#define FAULT_NON_PRESENT_PAGE 0x0
+    uint8_t	p : 1;
+    // 0 The access causing the fault was a read.
+    // 1 The access causing the fault was a write.
+    uint8_t	w_r : 1;
+    // 0 => The access causing the fault originated when the processor
+    // was executing in supervisor mode (CPL < 3).
+    // 1 => The access causing the fault originated when the processor
+    // was executing in user mode (CPL = 3).
+    uint8_t	u_s : 1;
+    // 0 => The fault was not caused by reserved bit violation ?
+    // 1 => The fault was caused by a reserved bit set to 1 in some paging-structure entry
+    uint8_t	rsvd : 1;
+    // fault was not caused by an instruction fetch ? Yes => 0x1, No => 0x0
+    uint8_t	i_d : 1;
+    // reserved
+  uint32_t	ignored : 27;
+} __attribute__((__packed__)) page_fault_handler_t;
 
 struct __attribute__((__packed__)) pde_fields_4mb_page {
   uint16_t	flags : 9;
@@ -35,11 +60,11 @@ struct __attribute__((__packed__)) pde_fields_4mb_page {
   uint32_t	addr : 10;
 };
 
-struct __attribute__((__packed__)) pde_fields_page_table {
+/*struct __attribute__((__packed__)) pde_fields_page_table {
   uint8_t	flags : 8;
   uint8_t	ignored : 4;
   uint32_t	ptaddr : 20;
-};
+};*/
 
 struct __attribute__((__packed__)) pte_fields {
   uint16_t	flags : 9;
@@ -50,7 +75,7 @@ struct __attribute__((__packed__)) pte_fields {
 typedef union	e_page_directory_entry
 {
   struct pde_fields_4mb_page	_4mb_fields;
-  struct pde_fields_page_table	fields;
+//  struct pde_fields_page_table	fields;
   uint32_t			value;
 }		t_page_directory_entry;
 
@@ -67,7 +92,9 @@ void	unmap_pages(struct frame *pdbr, void *vaddr, int n);
 
 void	finalize_pagination();
 void	init_page_directory();
+void	init_page_directory_for_frames(size_t frames_size);
 void	init_page_tables();
+size_t	get_kds_size();
 
 struct frame *get_kpd_frame();
 

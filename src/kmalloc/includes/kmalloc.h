@@ -22,8 +22,7 @@ void	*kmalloc(size_t size);
 /*
 ** add_value.c
 */
-void		prepare_split_value(t_mem_infos *min_avaible_place,
-				    size_t size);
+void		prepare_split_value(t_mem_infos *min_avaible_place,size_t size);
 void		*mem_search_place(size_t size);
 void		pagesize_add_update(t_page_infos *page_infos,
 				    size_t size);

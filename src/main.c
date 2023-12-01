@@ -41,7 +41,7 @@ static void print_hello_world(void)
 void run_debug_test(void)
 {
   //test_kmalloc_sbrk();
-  /* test_alloc_all_memory(); */
+//   test_alloc_all_memory();
   /* test_alloc_frames(); */
   /* test_dump_screen(); */
 }
@@ -49,12 +49,9 @@ void run_debug_test(void)
 void main_new(void)
 {
   finalize_pagination();
-
-    while (1) {
-        printk("Hi");
-    }
   if (g_kfs_context.magic_number != MAGIC_NUMBER) {
     printk("Invalid magic number");
+    return;
   }
 
   init_flat_gdt();
@@ -66,11 +63,10 @@ void main_new(void)
   if (!uart_is_init()) {
     printk("uart_init failed.");
   }
-  printk("Hello world !\n");
 
   interrupts_init();
-  init_frame_alloc(g_kfs_context.multiboot_info);
   init_page_tables();
+  init_frame_alloc(g_kfs_context.multiboot_info);
 
   run_debug_test();
 

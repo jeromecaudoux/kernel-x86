@@ -12,6 +12,7 @@
 #include	"kprintf.h"
 #include	"types.h"
 #include	"mem_infos.h"
+#include    "kprintf.h"
 
 void		prepare_split_value(t_mem_infos *min_avaible_place,
 				    size_t size)
@@ -83,20 +84,22 @@ retv		pagesize_add_update(t_page_infos *page_infos,
   return (SUCCES);
 }
 
-#include "kprintf.h"
-
 void		*mem_add_value(size_t size)
 {
   t_mem_infos	*mem_infos;
   t_page_infos	*page_infos;
   void		*ptr;
 
+  kprintf("1\n");
   if ((page_infos = get_first_value()) == NULL)
     return (NULL);
+  kprintf("2\n");
   if ((ptr = mem_search_place(size)) != NULL)
     return (ptr);
+  kprintf("3\n");
   if (pagesize_add_update(page_infos, size) == FAILED)
     return (NULL);
+  kprintf("4\n");
   mem_infos = page_infos->max_pos;
   //  kprintf("B 5 (%p)\n", mem_infos);
   mem_infos->size = size;

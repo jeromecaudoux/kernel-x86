@@ -13,7 +13,7 @@ void print_cr0()
   kprintf("cr0 => %p\n", value);
 }
 
-void print_cr2()
+int print_cr2()
 {
   int value = 0;
 
@@ -24,6 +24,7 @@ void print_cr2()
 		    : "eax");
 
   kprintf("cr2 => %p\n", value);
+  return value;
 }
 
 

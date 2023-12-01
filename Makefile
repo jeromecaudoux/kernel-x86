@@ -13,11 +13,15 @@ CFLAGS		+=	-I inc/tools/kprintf/
 CFLAGS		+=	-I inc/tools/kwrite/
 CFLAGS		+=	-I src/kmalloc/includes/
 
+ifeq ($(DEBUG),1)
+CFLAGS		+=	-DDEBUG=1
+endif
+
 LDFLAGS		+=	-nostdlib -nodefaultlibs -m32 -Wl,--build-id=none
 
 ASFLAGS		+=	-m32
 
-NAME		=	mykernel
+NAME		=	kernel-x86
 
 LD		=	kfs.ld
 
@@ -63,7 +67,7 @@ all:	$(NAME)
 $(NAME):$(OBJS)
 	$(CC) $(OBJS) -T $(LD) -o $(NAME) $(LDFLAGS)
 
- .S.o:
+.S.o:
 	$(CC) -c $(CFLAGS) $< -o $@
 
 boot:

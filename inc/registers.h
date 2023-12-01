@@ -4,7 +4,7 @@
 #include "kprintf.h"
 
 void print_cr0();
-void print_cr2();
+int print_cr2();
 void print_cr3();
 void print_cr4();
 

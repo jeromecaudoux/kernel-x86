@@ -18,19 +18,20 @@ void	test_kmalloc_sbrk()
 void	test_alloc_all_memory()
 {
   size_t bytes_per_alloc = 10 << 20;
+   kprintf("test_alloc_all_memory: %B\n", bytes_per_alloc);
   size_t i = 0;
   while (1) {
-    /* kprintf("loop %d kb\n", i / 1024); */
+     kprintf("loop %d\n", i);
     char *buffer2 = kmalloc(bytes_per_alloc);
-    /* kprintf("loop end %d mb\n", i >> 20); */
+     kprintf("loop end %d mb\n", i >> 20);
     if (buffer2 != NULL)
       {
-  	//kprintf("buffer %d [%p] => %p\n", i, buffer2, sbrk(0));
+  	kprintf("buffer %d [%p] => %p\n", i, buffer2, sbrk(0));
   	i += (bytes_per_alloc);
       }
     else
       {
-  	kprintf("kmalloc failed after %d mb allocated\n", i >> 20);
+  	kprintf("kmalloc failed after %d allocation. (%X)\n", i, i * bytes_per_alloc);
   	break;
       }
   }
@@ -44,7 +45,7 @@ void	test_alloc_frames()
   kprintf("frame => %p\n", frame);
   alloc_frames(2, &frame);
   kprintf("frame => %p\n", frame);
-  map_pages(get_kpd_frame(), (void *)0xC0800000, frame, 2, PF_PRES | PF_RW);
+  map_pages(get_kpd_frame(), (void *)0xC0800000, frame, 2, PF_PRES | PF_RW | PF_4M);
 
   uint32_t *test = (uint32_t *)0xC0801ffc; // at 1ffd it throw a page fault (uint32_t = 4bytes)
   *test = 42;
