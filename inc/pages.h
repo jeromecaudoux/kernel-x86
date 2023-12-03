@@ -8,8 +8,8 @@ typedef unsigned int phys_t;
 
 #define PF_PRES 0x1	/* Is present */
 #define PF_RW   0x2	/* Is writeable */
-#define PF_USER 0x4	/* Is user-mode */
-#define PF_WRTT 0x8	/* Write-through enabled */
+#define PF_USER 0x4 /* Is user-mode */
+#define PF_WRTT 0x8 /* Write-through enabled */
 #define PF_DISC 0x10	/* Cache disabled */
 #define PF_DIRT 0x20	/* Is dirty */
 #define PF_ACCS 0x40	/* Has been accessed */
@@ -60,11 +60,11 @@ struct __attribute__((__packed__)) pde_fields_4mb_page {
   uint32_t	addr : 10;
 };
 
-/*struct __attribute__((__packed__)) pde_fields_page_table {
+struct __attribute__((__packed__)) pde_fields_page_table {
   uint8_t	flags : 8;
   uint8_t	ignored : 4;
   uint32_t	ptaddr : 20;
-};*/
+};
 
 struct __attribute__((__packed__)) pte_fields {
   uint16_t	flags : 9;
@@ -75,7 +75,7 @@ struct __attribute__((__packed__)) pte_fields {
 typedef union	e_page_directory_entry
 {
   struct pde_fields_4mb_page	_4mb_fields;
-//  struct pde_fields_page_table	fields;
+ struct pde_fields_page_table	fields;
   uint32_t			value;
 }		t_page_directory_entry;
 
@@ -94,6 +94,7 @@ void	finalize_pagination();
 void	init_page_directory();
 void	init_page_directory_for_frames(size_t frames_size);
 void	init_page_tables();
+phys_t get_physaddr(void *vaddr);
 size_t	get_kds_size();
 
 struct frame *get_kpd_frame();

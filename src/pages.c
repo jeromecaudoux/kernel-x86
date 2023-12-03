@@ -1,5 +1,5 @@
-#include "interrupts.h"
 #include "pages.h"
+#include "interrupts.h"
 #include "kprintf.h"
 #include "registers.h"
 #include "string.h"
@@ -7,21 +7,23 @@
 uint32_t page_dir[1024] __attribute__((aligned(4096))); // align 4096
 static struct frame g_frame_page_directory;
 
-static size_t g_kds_size; //kernel data segment size for sbrk()
+static size_t g_kds_size; // kernel data segment size for sbrk()
 
-size_t get_kds_size() {
+size_t get_kds_size()
+{
     return g_kds_size;
 }
 
 static inline void __native_flush_tlb_single(unsigned long addr)
 {
-    asm volatile("invlpg (%0)" ::"r" (addr) : "memory");
+    asm volatile("invlpg (%0)" ::"r"(addr) : "memory");
 }
 
-static void page_fault_handler(__attribute__((unused))struct regs *regs) {
+static void page_fault_handler(__attribute__((unused)) struct regs *regs)
+{
     struct frame *frame = NULL;
     int cr2 = print_cr2();
-    page_fault_handler_t* handler = (page_fault_handler_t *) &(regs->err_code);
+    page_fault_handler_t *handler = (page_fault_handler_t *) &(regs->err_code);
 
 #ifdef DEBUG
     kprintf("\n----------------- PAGE FAULT ---------------------\n");
@@ -35,36 +37,43 @@ static void page_fault_handler(__attribute__((unused))struct regs *regs) {
     kprintf("--------------------------------------------------\n");
 #endif
 
+    while (1)
+        ;
+
     if (handler->p == FAULT_NON_PRESENT_PAGE) {
         alloc_frames(1, &frame);
         map_pages(get_kpd_frame(), (void *) cr2, frame, 1, PF_PRES | PF_RW | PF_4M);
         return;
     }
-    __asm__ volatile ("cli\n\t"
-                      "hlt\n\t");
+    __asm__ volatile("cli\n\t"
+                     "hlt\n\t");
 }
 
-struct frame *get_kpd_frame() {
+struct frame *get_kpd_frame()
+{
     return &g_frame_page_directory;
 }
 
-static void disable_cache() {
-    __asm__ volatile ("push %eax\n\t"
-                      "mov %cr0, %eax;\n\t"
-                      "or $(1 << 30), %eax;\n\t"
-                      "mov %eax, %cr0;\n\t"
-                      "wbinvd\n\t"
-                      "pop %eax");
+static void disable_cache()
+{
+    __asm__ volatile("push %eax\n\t"
+                     "mov %cr0, %eax;\n\t"
+                     "or $(1 << 30), %eax;\n\t"
+                     "mov %eax, %cr0;\n\t"
+                     "wbinvd\n\t"
+                     "pop %eax");
 }
 
-static void *get_kds_end_addr(void) {
+static void *get_kds_end_addr(void)
+{
     size_t nb_pages;
 
     nb_pages = g_kds_size / getpagesize() + (g_kds_size % 0x1000 > 0 ? 1 : 0);
     return (void *) (0xc0800000 + nb_pages * getpagesize());
 }
 
-void *sbrk(ssize_t size) {
+void *sbrk(ssize_t size)
+{
     struct frame *frames;
     ssize_t nb_pages;
     void *old_kds_end;
@@ -76,11 +85,12 @@ void *sbrk(ssize_t size) {
         // kprintf("sbrk nb_pages: %d g_kds_size: %d\n", nb_pages, g_kds_size);
         if (alloc_frames(nb_pages, &frames) == FAILED)
             return (void *) -1;
-//        kprintf("alloc frames ok => %p\n", frames);
+        //        kprintf("alloc frames ok => %p\n", frames);
         if (map_pages(get_kpd_frame(), get_kds_end_addr(), frames, nb_pages, PF_PRES | PF_RW) ==
             FAILED)
             return (void *) -1;
-    } else { // size < 0
+    }
+    else { // size < 0
         nb_pages = -size / 0x1000 + (-size % 0x1000 > 0 ? 1 : 0);
         unmap_pages(get_kpd_frame(), get_kds_end_addr() - nb_pages * getpagesize(), nb_pages);
     }
@@ -90,13 +100,14 @@ void *sbrk(ssize_t size) {
     return old_kds_end;
 }
 
-size_t getpagesize() {
+size_t getpagesize()
+{
     return 0x1000;
 }
 
-void finalize_pagination() {
-    uint32_t *page_directory = (uint32_t * )(
-            (unsigned long) &page_dir - (unsigned long) SYSTEM_ADDR_BASE);
+void finalize_pagination()
+{
+    uint32_t *page_directory = (uint32_t *) ((unsigned long) &page_dir - (unsigned long) SYSTEM_ADDR_BASE);
 
     // disable virtual page at 0x0
     page_directory[0] = 0;
@@ -115,7 +126,8 @@ void finalize_pagination() {
 /*
  * http://www.intel.com/content/www/us/en/architecture-and-technology/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.html
  */
-void init_page_tables() {
+void init_page_tables()
+{
     uint16_t pde_cursor;
     t_page_directory_entry *pde;
 
@@ -127,21 +139,30 @@ void init_page_tables() {
     // fill the page directory with all page table addrs
     pde_cursor = 0;
     while (pde_cursor < 1024) {
-        pde = (t_page_directory_entry *) &(page_dir[pde_cursor]);
+        pde = ((t_page_directory_entry *) g_frame_page_directory.addr) + pde_cursor;
         if (!(pde->value & PF_PRES)) {
-            pde->_4mb_fields.addr = PDE_ADDR_HIGH(0x400000 + pde_cursor * 1024 * sizeof(t_page_table_entry));
-            pde->_4mb_fields.flags = PF_RW | PF_4M;
-        }
+            pde->fields.ptaddr = PDE_ADDR_HIGH(0x00400000 + pde_cursor * 1024 * sizeof(t_page_table_entry));
+            // pde->_4mb_fields.flags = PF_RW | PF_4M;
+            pde->fields.flags = PF_RW | PF_4M;
+            // if (pde_cursor == 770)
+            //     kprintf("pde %d: %p => %p\n", pde_cursor, 0x00400000 + pde_cursor * 1024 * sizeof(t_page_table_entry), pde->fields.ptaddr);
+        } /* else {
+
+        pde = ((t_page_directory_entry *) g_frame_page_directory.addr) + pde_cursor;
+        kprintf("P pde %d: %p => %b. 4mb: %x, present: %x\n", pde_cursor, pde, pde->value, pde->value & PF_4M, pde->value & PF_PRES);
+        pde = ((t_page_directory_entry *) g_frame_page_directory.vaddr) + pde_cursor;
+        kprintf("V pde %d: %p => %b. 4mb: %x, present: %x\n", pde_cursor, pde, pde->value, pde->value & PF_4M, pde->value & PF_PRES);
+
+        } */
         ++pde_cursor;
     }
-
     // clear the 4mb page of the page tables : all pte are not present.
     memset(PAGE_TABLES_START_VADDR, 0, 0x400000);
 }
 
-void init_page_directory() {
-    uint32_t *page_directory = (uint32_t * )(
-            (unsigned long) &page_dir - (unsigned long) SYSTEM_ADDR_BASE);
+void init_page_directory()
+{
+    uint32_t *page_directory = (uint32_t *) ((unsigned long) &page_dir - (unsigned long) SYSTEM_ADDR_BASE);
     t_page_directory_entry pde;
 
     memset(page_directory, 0, 1024 * sizeof(uint32_t));
@@ -166,43 +187,65 @@ void init_page_directory() {
     page_directory[PAGE_TABLES_DIRECTORY_INDEX] = pde.value;
 }
 
+phys_t get_physaddr(void *vaddr)
+{
+    phys_t pdindex = (phys_t) vaddr >> 22;
+    t_page_directory_entry *pd = (t_page_directory_entry *) &(page_dir[pdindex]);
+
 #ifdef DEBUG
-static void *get_physaddr(void *virtualaddr) {
-    unsigned long pdindex = (unsigned long)virtualaddr >> 22;
-    unsigned long ptindex = (unsigned long)virtualaddr >> 12 & 0x03FF;
-    unsigned long offset_within_page = (unsigned long) virtualaddr & 0xFFF;
+    kprintf("\n[V2Paddr] vaddr: %p\n", vaddr);
+    kprintf("[V2Paddr] PDE index: %d\n", pdindex);
+    kprintf("[V2Paddr] PDE present: %d\n", pd->value & PF_PRES);
+    kprintf("[V2Paddr] PDE is 4mb: %d\n", pd->value & PF_4M);
+#endif
 
-    kprintf("\nvirtualaddr: %p\n", virtualaddr);
-    kprintf("pde index: %d\n", pdindex);
-    kprintf("pte index: %d\n", ptindex);
-    kprintf("offset_within_page: %p\n", offset_within_page);
-
-    t_page_directory_entry *pd = (t_page_directory_entry*) &(page_dir[pdindex]);
-    // Here you need to check whether the PD entry is present.
-    if (!(pd->value & PF_PRES) || pd->_4mb_fields.ignored || pd->_4mb_fields.ignored_) {
-       return NULL;
+    if (!(pd->value & PF_PRES)) {
+        return NULL;
     }
-    t_page_table_entry *pt = (t_page_table_entry *) PDE_PTADDR_TO_VADDR(pd->_4mb_fields.addr);
+    if (pd->value & PF_4M) {
+        if (pd->_4mb_fields.ignored || pd->_4mb_fields.ignored_) {
+            return NULL;
+        }
+        phys_t offset_within_page = (phys_t) vaddr & 0xFFF;
+#ifdef DEBUG
+        kprintf("[V2Paddr] Offset_within_page: %p\n", (void *) offset_within_page);
+#endif
+        return (pd->_4mb_fields.addr << 22) + offset_within_page;
+    }
+
+    t_page_table_entry *pt = (t_page_table_entry *) PDE_PTADDR_TO_VADDR(pd->fields.ptaddr);
+    phys_t ptindex = (phys_t) vaddr >> 12 & 0x03FF;
+    phys_t offset_within_page = (phys_t) vaddr & 0xFFF;
+
     pt = &pt[ptindex];
-    // Here you need to check whether the PT entry is present.
+#ifdef DEBUG
+    kprintf("[V2Paddr] PTE index: %d\n", ptindex);
+    kprintf("[V2Paddr] PTE present: %d\n", pt->value & PF_PRES);
+    kprintf("[V2Paddr] Offset_within_page: %p\n", (void *) offset_within_page);
+#endif
+
     if (!(pt->value & PF_PRES) || pt->fields.ignored) {
         return NULL;
     }
 
-    kprintf("pde is present: %d\n", pd->value & PF_PRES);
-    kprintf("pt at %p is present: %d\n", &pt[ptindex], pt->value & PF_PRES);
-
-    return (void *) ((pt->fields.addr << 12) + offset_within_page);
-}
+#ifdef DEBUG
+    kprintf("[V2Paddr] PDE flags: %b\n", pd->fields.flags);
+    kprintf("[V2Paddr] PTE flags: %b\n", pt->fields.flags);
+    kprintf("[V2Paddr] vaddr %p is mapped to paddr %p\n", vaddr, (pt->fields.addr << 12) + offset_within_page);
 #endif
 
+    return (pt->fields.addr << 12) + offset_within_page;
+}
+
+extern void flush_tlb(void);
 /*
  * Setup the page directory entries for the frames.
  * This function exist because we need to enable the pde and pte before writing the frames into the
  * memory.
  * Probably its possible to handle this through the page fault handler.
  */
-void init_page_directory_for_frames(size_t frames_size) {
+void init_page_directory_for_frames(size_t frames_size)
+{
     int pde_count = (frames_size / FOUR_MB) + (frames_size % FOUR_MB > 0 ? 1 : 0);
     t_page_directory_entry *pde;
     t_page_table_entry *pte;
@@ -212,24 +255,27 @@ void init_page_directory_for_frames(size_t frames_size) {
 
     while (cursor < pde_count) {
         pde_cursor = FRAMES_DIRECTORY_INDEX + cursor;
-        pde = (t_page_directory_entry*) &(page_dir[pde_cursor]);
-        pde->_4mb_fields.flags = PF_PRES | PF_RW | PF_4M;
+        pde = (t_page_directory_entry *) &(page_dir[pde_cursor]);
+        // todo PF_RW is not needed. To check when the user land is implemented.
+        pde->fields.flags = PF_PRES | PF_RW;
 
         pte_cursor = 0;
         while (pte_cursor < 1024) {
-            pte = (t_page_table_entry *) PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr);
+            pte = (t_page_table_entry *) PDE_PTADDR_TO_VADDR(pde->fields.ptaddr);
+            pte = &pte[pte_cursor];
             unsigned int faddr = ((unsigned int) FRAMES_START_PADDR) + cursor * FOUR_MB + pte_cursor * FRAME_SIZE;
-            pte[pte_cursor].value = 0;
-            pte[pte_cursor].fields.addr = PTE_ADDR_HIGH(faddr);
-            pte[pte_cursor].fields.flags = PF_PRES | PF_RW;
+            pte->value = 0;
+            pte->fields.addr = PTE_ADDR_HIGH(faddr);
+            pte->fields.flags = PF_PRES | PF_RW;
             __native_flush_tlb_single((unsigned long) &pte[pte_cursor]);
+
             ++pte_cursor;
         }
         ++cursor;
     }
 
 #ifdef DEBUG
-    kprintf("Control vaddr 0xc08000000 is mapped to paddr %p\n", get_physaddr(0xc0800000));
+    kprintf("Control vaddr 0xc08000000 is mapped to paddr %p\n", get_physaddr((void *) 0xc0800000));
 #endif
 
     // update the global count of allocated pages
@@ -243,7 +289,8 @@ void init_page_directory_for_frames(size_t frames_size) {
  * -> pdbr: frame which contains page directory
  * -> n: number of pages needed
  */
-void *alloc_pages(struct frame *pdbr, size_t n) {
+void *alloc_pages(struct frame *pdbr, size_t n)
+{
     t_page_directory_entry *pde;
     t_page_table_entry *pte;
     void *vaddr = NULL;
@@ -256,19 +303,20 @@ void *alloc_pages(struct frame *pdbr, size_t n) {
         if ((pde->value & PF_PRES) && !(pde->value & PF_4M)) {
             pte_cursor = 0;
             while (pte_cursor < 1024) {
-                pte = &(((t_page_table_entry * )(
-                        PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
+                pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
                 if (!(pte->value & PF_PRES)) {
                     ++count;
                     if (count == n)
                         return vaddr;
-                } else {
+                }
+                else {
                     vaddr = (void *) (pde_cursor * 0x400000 + pte_cursor * 0x1000);
                     count = 0;
                 }
                 ++pte_cursor;
             }
-        } else {
+        }
+        else {
             vaddr = (void *) (pde_cursor * 0x400000 + pte_cursor * 0x1000);
             count = 0;
         }
@@ -286,8 +334,9 @@ void *alloc_pages(struct frame *pdbr, size_t n) {
  * -> frames: frames to map
  * -> n: number of frames to map
  * -> flags: access right associated to pages
-*/
-int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, int flags) {
+ */
+int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, int flags)
+{
     t_page_table_entry *pte;
     t_page_directory_entry *pde;
     uint16_t pde_cursor;
@@ -300,7 +349,7 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
 
         pde = &(((t_page_directory_entry *) pdbr->vaddr)[pde_cursor]);
         if ((pde->value & PF_PRES) && !(pde->value & PF_4M)) {
-            pte = &(((t_page_table_entry * )(PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
+            pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
             if (pte->value & PF_PRES) {
                 return FAILED; // todo : remove every pages setted previously (or a kernel panic)
             }
@@ -316,7 +365,8 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
             frames = (struct frame *) ((unsigned long) frames + sizeof(struct frame));
             vaddr = (void *) ((unsigned long) vaddr + 0x1000);
             ++cursor;
-        } else {
+        }
+        else {
             return FAILED; // todo : remove every pages setted previously (or a kernel panic)
         }
     }
@@ -334,7 +384,8 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
  * Example: Map VGA text buffer to virtual address space
  * void *video_mem = map_io(pdbr, 0xB8000, 80 * 25 * 2);
  */
-void *map_io(struct frame *pdbr, phys_t ioadddr, size_t len) {
+void *map_io(struct frame *pdbr, phys_t ioadddr, size_t len)
+{
     void *vaddr;
     struct frame frame;
     size_t nb_pages;
@@ -364,7 +415,8 @@ void *map_io(struct frame *pdbr, phys_t ioadddr, size_t len) {
  * -> n: number of pages to unmap
  */
 // tested
-void unmap_pages(struct frame *pdbr, void *vaddr, int n) {
+void unmap_pages(struct frame *pdbr, void *vaddr, int n)
+{
     t_page_table_entry *pte;
     t_page_directory_entry *pde;
     uint16_t pde_cursor;
@@ -376,7 +428,7 @@ void unmap_pages(struct frame *pdbr, void *vaddr, int n) {
         pte_cursor = ((unsigned long) vaddr - pde_cursor * 0x400000) / 0x1000;
 
         pde = &(((t_page_directory_entry *) pdbr->vaddr)[pde_cursor]);
-        pte = &(((t_page_table_entry * )(PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
+        pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
 
         // clear the page table entry
         pte->value = 0x0;
