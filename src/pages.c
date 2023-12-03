@@ -142,18 +142,8 @@ void init_page_tables()
         pde = ((t_page_directory_entry *) g_frame_page_directory.addr) + pde_cursor;
         if (!(pde->value & PF_PRES)) {
             pde->fields.ptaddr = PDE_ADDR_HIGH(0x00400000 + pde_cursor * 1024 * sizeof(t_page_table_entry));
-            // pde->_4mb_fields.flags = PF_RW | PF_4M;
             pde->fields.flags = PF_RW | PF_4M;
-            // if (pde_cursor == 770)
-            //     kprintf("pde %d: %p => %p\n", pde_cursor, 0x00400000 + pde_cursor * 1024 * sizeof(t_page_table_entry), pde->fields.ptaddr);
-        } /* else {
-
-        pde = ((t_page_directory_entry *) g_frame_page_directory.addr) + pde_cursor;
-        kprintf("P pde %d: %p => %b. 4mb: %x, present: %x\n", pde_cursor, pde, pde->value, pde->value & PF_4M, pde->value & PF_PRES);
-        pde = ((t_page_directory_entry *) g_frame_page_directory.vaddr) + pde_cursor;
-        kprintf("V pde %d: %p => %b. 4mb: %x, present: %x\n", pde_cursor, pde, pde->value, pde->value & PF_4M, pde->value & PF_PRES);
-
-        } */
+        }
         ++pde_cursor;
     }
     // clear the 4mb page of the page tables : all pte are not present.
@@ -275,7 +265,7 @@ void init_page_directory_for_frames(size_t frames_size)
     }
 
 #ifdef DEBUG
-    kprintf("Control vaddr 0xc08000000 is mapped to paddr %p\n", get_physaddr((void *) 0xc0800000));
+    kprintf("Control: vaddr 0xc08000000 is mapped to paddr %p\n", get_physaddr((void *) 0xc0800000));
 #endif
 
     // update the global count of allocated pages
