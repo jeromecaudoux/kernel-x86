@@ -13,6 +13,8 @@
 
 # define	ERROR_SBRK_MSG	"kmalloc/free Error : sbrk() failed\n"
 
+#include    "types.h"
+
 typedef struct		s_mem_infos
 {
   size_t		size;

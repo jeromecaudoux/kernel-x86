@@ -23,18 +23,15 @@ static void init_ram_frames()
 {
     struct frame *frame;
     size_t cursor;
-    int *fend_vaddr =
-        (void *) ((unsigned int) g_frames_context.frames_meta_start_vaddr +
-                  g_frames_context.frames_count);
-    phys_t fend_paddr = get_physaddr(fend_vaddr);
+    phys_t fend_paddr = get_physaddr(g_frames_context.frames_meta_end_vaddr);
 
     memset(g_frames_context.frames_meta_start_vaddr, 0,
            g_frames_context.frames_count * sizeof(struct frame));
 
     cursor = 0;
     for (cursor = 0; cursor < g_frames_context.frames_count; ++cursor) {
-        frame = get_frame_at(cursor);
         phys_t addr = RAM_BASE_ADDR + cursor * FRAME_SIZE;
+        frame = get_frame_at(cursor);
         frame->ref_count = addr < fend_paddr ? 1 : 0;
         if (frame->ref_count) {
             frame->vaddr = (void *) g_frames_context.frames_meta_start_vaddr +
@@ -43,11 +40,11 @@ static void init_ram_frames()
     }
 #ifdef DEBUG
     kprintf("Frames metadata in memory : [%p] ... [%p]\n",
-            g_frames_context.frames_meta_start_vaddr, fend_paddr);
+            g_frames_context.frames_meta_start_vaddr, g_frames_context.frames_meta_end_vaddr);
 #endif
 }
 
-static void setup_frames_addrs(const memory_map_t *map)
+static void setup_frames_addrs(memory_map_t *map)
 {
     ssize_t ram_free_space = map->length_low - KERNEL_SIZE_IN_RAM;
     size_t nb_frames = ((unsigned long) ram_free_space) / FRAME_SIZE;
@@ -68,12 +65,18 @@ static void setup_frames_addrs(const memory_map_t *map)
     kprintf("FRAMES_START_VADDR: %p\n\n", FRAMES_START_VADDR);
 #endif
 
+    g_frames_context.map = map;
     g_frames_context.frames_meta_start_vaddr =
         (struct frame *) (FRAMES_START_VADDR);
     g_frames_context.frames_count = nb_frames;
+    g_frames_context.frames_meta_end_vaddr =
+        (void *) (g_frames_context.frames_meta_start_vaddr +
+                  nb_frames);
 
     init_page_directory_for_frames(size_of_meta);
 }
+
+t_frame_context *get_frames_context() { return &g_frames_context; }
 
 void init_frame_alloc(const multiboot_info_t *multiboot_info)
 {
@@ -94,7 +97,7 @@ void init_frame_alloc(const multiboot_info_t *multiboot_info)
     cursor = 0;
     while (cursor < size) {
         memory_map_t *mmap = &(mmaps[cursor]);
-        kprintf("\tMemory found at %p of size %B %x b (%d)\n", mmap->base_addr_low,
+        kprintf("\tMemory found at %p->%p of size %B %x b (%d)\n", mmap->base_addr_low, mmap->base_addr_low + mmap->length_low,
                 mmap->length_low, mmap->length_low, mmap->type);
 
         if (mmap->base_addr_low == RAM_BASE_ADDR) {
@@ -155,9 +158,9 @@ int alloc_frames(int n, struct frame **frames)
 
     while (cursor < g_frames_context.frames_count) {
         fcurrent = get_frame_at(cursor);
-        //        kprintf("frame %p (ref count %d) at %d at %p\n", fcurrent,
-        //        fcurrent->ref_count, cursor,
-        //        g_frames_context.frames_meta_start_vaddr);
+        //    kprintf("frame %p (ref count %d) at %d at %p\n", fcurrent,
+        //    fcurrent->ref_count, cursor,
+        //    g_frames_context.frames_meta_start_vaddr);
 
         if (fcurrent->ref_count == 0) {
             if (fsaved == NULL)

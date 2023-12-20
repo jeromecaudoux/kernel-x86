@@ -1,4 +1,5 @@
 #include "pages.h"
+#include "frame.h"
 #include "interrupts.h"
 #include "kprintf.h"
 #include "registers.h"
@@ -68,8 +69,8 @@ static void *get_kds_end_addr(void)
 {
     size_t nb_pages;
 
-    nb_pages = g_kds_size / getpagesize() + (g_kds_size % 0x1000 > 0 ? 1 : 0);
-    return (void *) (0xc0800000 + nb_pages * getpagesize());
+    nb_pages = g_kds_size / getpagesize() + (g_kds_size % FRAME_SIZE > 0 ? 1 : 0);
+    return (void *) (0xc08000000 + nb_pages * getpagesize());
 }
 
 void *sbrk(ssize_t size)
@@ -78,20 +79,28 @@ void *sbrk(ssize_t size)
     ssize_t nb_pages;
     void *old_kds_end;
 
+    kprintf("sbrk: %d\n", size);
     if (size == 0)
         return get_kds_end_addr();
     if (size > 0) {
-        nb_pages = size / 0x1000 + (size % 0x1000 > 0 ? 1 : 0);
-        // kprintf("sbrk nb_pages: %d g_kds_size: %d\n", nb_pages, g_kds_size);
+        nb_pages = size / FRAME_SIZE + (size % FRAME_SIZE > 0 ? 1 : 0);
+
+        uint32_t max_nb_pages = get_frames_context()->map->base_addr_low + get_frames_context()->map->length_low / FRAME_SIZE;
+        uint32_t next_nb_pages = get_kds_size() / FRAME_SIZE + nb_pages;
+        // kprintf("get_kds_end_addr(): %p\n", get_kds_end_addr());
+        // kprintf("max: %p\n", (void *) max);
+        if (next_nb_pages > max_nb_pages) {
+            kprintf("sbrk failed: not enough memory\n");
+            return (void *) -1;
+        }
         if (alloc_frames(nb_pages, &frames) == FAILED)
             return (void *) -1;
-        //        kprintf("alloc frames ok => %p\n", frames);
         if (map_pages(get_kpd_frame(), get_kds_end_addr(), frames, nb_pages, PF_PRES | PF_RW) ==
             FAILED)
             return (void *) -1;
     }
     else { // size < 0
-        nb_pages = -size / 0x1000 + (-size % 0x1000 > 0 ? 1 : 0);
+        nb_pages = -size / FRAME_SIZE + (-size % FRAME_SIZE > 0 ? 1 : 0);
         unmap_pages(get_kpd_frame(), get_kds_end_addr() - nb_pages * getpagesize(), nb_pages);
     }
 
@@ -102,7 +111,7 @@ void *sbrk(ssize_t size)
 
 size_t getpagesize()
 {
-    return 0x1000;
+    return FRAME_SIZE;
 }
 
 void finalize_pagination()
@@ -142,7 +151,7 @@ void init_page_tables()
         pde = ((t_page_directory_entry *) g_frame_page_directory.addr) + pde_cursor;
         if (!(pde->value & PF_PRES)) {
             pde->fields.ptaddr = PDE_ADDR_HIGH(0x00400000 + pde_cursor * 1024 * sizeof(t_page_table_entry));
-            pde->fields.flags = PF_RW | PF_4M;
+            // pde->fields.flags = PF_RW | PF_4M;
         }
         ++pde_cursor;
     }
@@ -249,8 +258,9 @@ void init_page_directory_for_frames(size_t frames_size)
         // todo PF_RW is not needed. To check when the user land is implemented.
         pde->fields.flags = PF_PRES | PF_RW;
 
+        uint16_t max_last_pde = (frames_size % FOUR_MB) / FRAME_SIZE + (frames_size % FRAME_SIZE > 0 ? 1 : 0);
         pte_cursor = 0;
-        while (pte_cursor < 1024) {
+        while (pte_cursor < 1024 && (cursor < pde_count - 1 || pte_cursor < max_last_pde)) {
             pte = (t_page_table_entry *) PDE_PTADDR_TO_VADDR(pde->fields.ptaddr);
             pte = &pte[pte_cursor];
             unsigned int faddr = ((unsigned int) FRAMES_START_PADDR) + cursor * FOUR_MB + pte_cursor * FRAME_SIZE;
@@ -269,7 +279,7 @@ void init_page_directory_for_frames(size_t frames_size)
 #endif
 
     // update the global count of allocated pages
-    g_kds_size = pde_count * 1024;
+    // g_kds_size = pde_count * 1024;
 }
 
 /*
@@ -285,15 +295,16 @@ void *alloc_pages(struct frame *pdbr, size_t n)
     t_page_table_entry *pte;
     void *vaddr = NULL;
     size_t count = 0;
-    uint16_t pde_cursor = 0;
-    uint16_t pte_cursor = 0;
+    uint32_t fvaddr = get_frames_context()->frames_meta_end_vaddr;
+    uint16_t pde_cursor = fvaddr / FOUR_MB;
+    uint16_t pte_cursor = ((fvaddr - pde_cursor * FOUR_MB) / FRAME_SIZE) + 1;
 
     while (pde_cursor < 1024) {
         pde = &(((t_page_directory_entry *) pdbr->vaddr)[pde_cursor]);
         if ((pde->value & PF_PRES) && !(pde->value & PF_4M)) {
             pte_cursor = 0;
             while (pte_cursor < 1024) {
-                pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
+                pte = &((t_page_table_entry *) PDE_PTADDR_TO_VADDR(pde->fields.ptaddr))[pte_cursor];
                 if (!(pte->value & PF_PRES)) {
                     ++count;
                     if (count == n)
@@ -333,14 +344,20 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
     uint16_t pte_cursor;
     size_t cursor = 0;
 
+kprintf("map_pages: vaddr %p, frames %p, n %d, flags %b\n", vaddr, frames, n, flags);
     while (cursor < n) {
-        pde_cursor = (unsigned long) vaddr / 0x400000;
-        pte_cursor = ((unsigned long) vaddr - pde_cursor * 0x400000) / 0x1000;
+        pde_cursor = (unsigned long) vaddr / FOUR_MB;
+        pte_cursor = ((unsigned long) vaddr - pde_cursor * FOUR_MB) / FRAME_SIZE;
 
         pde = &(((t_page_directory_entry *) pdbr->vaddr)[pde_cursor]);
+        if (!(pde->value & PF_PRES)) {
+            pde->fields.flags = PF_PRES | PF_RW;
+        }
         if ((pde->value & PF_PRES) && !(pde->value & PF_4M)) {
-            pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
+            pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->fields.ptaddr)))[pte_cursor]);
+                // kprintf("GOING FOR pde %d, pte %d pte->value: %b\n", pde_cursor, pte_cursor, pte->value);
             if (pte->value & PF_PRES) {
+                kprintf("map_pages failed: pde %d, pte %d pte->value: %b\n", pde_cursor, pte_cursor, pte->value);
                 return FAILED; // todo : remove every pages setted previously (or a kernel panic)
             }
 
@@ -348,15 +365,17 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
             pte->fields.addr = PTE_ADDR_HIGH(frames->addr);
             pte->fields.flags = flags;
             __native_flush_tlb_single((unsigned long) pte);
+
             frames->ref_count += 1;
             frames->vaddr = vaddr;
 
             // update frames, vaddr and cursor
             frames = (struct frame *) ((unsigned long) frames + sizeof(struct frame));
-            vaddr = (void *) ((unsigned long) vaddr + 0x1000);
+            vaddr = (void *) ((unsigned long) vaddr + FRAME_SIZE);
             ++cursor;
         }
         else {
+            kprintf("map_pages failed: pde %d pde->value %b\n", pde_cursor, pde->value);
             return FAILED; // todo : remove every pages setted previously (or a kernel panic)
         }
     }
@@ -381,16 +400,16 @@ void *map_io(struct frame *pdbr, phys_t ioadddr, size_t len)
     size_t nb_pages;
     size_t cursor;
 
-    nb_pages = (len / 0x1000) + (len % 0x1000 > 0 ? 1 : 0);
+    nb_pages = (len / FRAME_SIZE) + (len % FRAME_SIZE > 0 ? 1 : 0);
 
     frame.addr = ioadddr & 0xFFFFF000;
     vaddr = alloc_pages(pdbr, nb_pages);
 
     cursor = 0;
     while (cursor < nb_pages) {
-        map_pages(pdbr, (void *) ((unsigned long) vaddr + cursor * 0x1000), &frame, 1,
+        map_pages(pdbr, (void *) ((unsigned long) vaddr + cursor * FRAME_SIZE), &frame, 1,
                   PF_PRES | PF_RW);
-        frame.addr += 0x1000;
+        frame.addr += FRAME_SIZE;
         ++cursor;
     }
     return vaddr + ioadddr - (ioadddr & 0xFFFFF000);

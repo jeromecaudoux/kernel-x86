@@ -42,7 +42,7 @@ static void print_hello_world(void)
 void run_debug_test(void)
 {
   // test_kmalloc_sbrk();
-  //   test_alloc_all_memory();
+  // test_alloc_all_memory();
   /* test_alloc_frames(); */
   /* test_dump_screen(); */
 }
