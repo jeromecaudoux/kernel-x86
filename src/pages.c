@@ -70,7 +70,7 @@ static void *get_kds_end_addr(void)
     size_t nb_pages;
 
     nb_pages = g_kds_size / getpagesize() + (g_kds_size % FRAME_SIZE > 0 ? 1 : 0);
-    return (void *) (0xc08000000 + nb_pages * getpagesize());
+    return (void *) ((void *) 0xc08000000 + nb_pages * getpagesize());
 }
 
 void *sbrk(ssize_t size)
@@ -295,7 +295,7 @@ void *alloc_pages(struct frame *pdbr, size_t n)
     t_page_table_entry *pte;
     void *vaddr = NULL;
     size_t count = 0;
-    uint32_t fvaddr = get_frames_context()->frames_meta_end_vaddr;
+    uint32_t fvaddr = (uint32_t) get_frames_context()->frames_meta_end_vaddr;
     uint16_t pde_cursor = fvaddr / FOUR_MB;
     uint16_t pte_cursor = ((fvaddr - pde_cursor * FOUR_MB) / FRAME_SIZE) + 1;
 
