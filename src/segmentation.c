@@ -49,12 +49,7 @@ void tss_set_esp(uint32_t esp0) {
     g_tss.esp0 = esp0;
 }
 
-static void reload_segment_selectors(void) {
-	gdt_flush(&g_gdt);
-	tss_flush();
-}
-
-static void load_gdt_register(void) {
+static void flush_gdt_and_tss(void) {
 	gdt_register_t gdt_register;
 
 	gdt_register.base = (uint32_t) &g_gdt;
@@ -93,5 +88,5 @@ void init_flat_gdt(void)
     asm volatile("mov %%esp, %0" : "=r"(esp));
 	set_tss_entry(5, 0x10, esp);
 
-	load_gdt_register();
+	flush_gdt_and_tss();
 }

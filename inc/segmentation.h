@@ -97,5 +97,7 @@ int set_gdt_entry(int n, uint32_t base, uint32_t limit, uint8_t access, uint8_t 
 int set_tss_entry(int n, uint16_t ss0, uint32_t esp0);
 void init_flat_gdt(void);
 void tss_set_esp(uint32_t esp0);
+void tss_flush();
+void gdt_flush(void* gdt_addr);
 
 #endif /* !SEGMENTATION_H_ */

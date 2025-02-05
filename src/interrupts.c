@@ -10,6 +10,7 @@
 #include "kb.h"
 #include "uart.h"
 #include "kprintf.h"
+#include "registers.h"
 
 static idt_entry_t		g_idt[IDT_SIZE];
 static interrupt_handler	g_handlers[256];
@@ -103,10 +104,10 @@ void irq_handler(struct regs* regs)
 	}
 }
 
-static void disable_interrupts(void)
-{
-	asm("cli");
-}
+// static void disable_interrupts(void)
+// {
+// 	asm("cli");
+// }
 
 static void enable_interrupts(void)
 {

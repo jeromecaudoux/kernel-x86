@@ -47,6 +47,21 @@ void run_debug_test(void)
   // test_dump_screen();
 }
 
+
+void prepare_userland(void)
+{
+ // 1. Déterminer la taille de la fonction (environ, via labels)
+    unsigned char *func_start = (unsigned char *)main_userland;
+    unsigned char *func_end = func_start;
+    while (*func_end != 0xC3) {  // find RET (0xC3)
+        func_end++;
+    }
+    size_t func_size = func_end - func_start + 1;
+
+  kprintf("func_start: %p => %p [%d]\n", func_start, func_end, func_size);
+  // switch_to_userland();
+}
+
 void main_userland(void)
 {
   while (1);
@@ -82,7 +97,7 @@ void main_new(void)
   sleep(1);
 
   // init_flat_gdt();
-  switch_to_userland();
+  prepare_userland();
 
   print_hello_world();
 }

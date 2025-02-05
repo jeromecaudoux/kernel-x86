@@ -81,7 +81,7 @@ switch_to_userland:
 	pushl $0x23        # New stack segment selector (RPL 3)
 	pushl %eax  	# New stack pointer
 
-	pushf              # Push flags
+	pushf              # Push flags with "or $0x200" to re-enable interrupts in user mode
 	pop %eax
 	or $0x200, %eax
 	push %eax
@@ -116,6 +116,6 @@ gdt_flush:
    movw %ax, %gs
    movw %ax, %ss
 
-   ljmp $0x08, $.flush # Saut lointain vers le nouveau segment de code
+   ljmp $0x08, $.flush
 .flush:
    ret
