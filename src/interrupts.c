@@ -9,10 +9,46 @@
 #include "io.h"
 #include "kb.h"
 #include "uart.h"
+#include "kprintf.h"
 
 static idt_entry_t		g_idt[IDT_SIZE];
 static interrupt_handler	g_handlers[256];
 
+
+char* exception_messages[] = {
+    "Division By Zero",
+    "Debug",
+    "Non Maskable Interrupt",
+    "Breakpoint",
+    "Into Detected Overflow",
+    "Out of Bounds",
+    "Invalid Opcode",
+    "No Coprocessor",
+    "Double fault",
+    "Coprocessor Segment Overrun",
+    "Bad TSS",
+    "Segment not present",
+    "Stack fault",
+    "General protection fault",
+    "Page fault",
+    "Unknown Interrupt",
+    "Coprocessor Fault",
+    "Alignment Fault",
+    "Machine Check", 
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved"
+};
 
 static void load_idt_register(void) {
 	idt_register_t idt_register;
@@ -31,16 +67,50 @@ void register_irq_handler(int int_number, interrupt_handler handler)
 	g_handlers[int_number] = handler;
 }
 
+// https://wiki.osdev.org/Exceptions#General_Protection_Fault
 void irq_handler(struct regs* regs)
 {
-
 	if (g_handlers[regs->int_no] != NULL) {
 		(g_handlers[regs->int_no])(regs);
 	}
 
 	if (regs->int_no >= 32 && regs->int_no < 48) {
 		irq_send_eoi(regs->int_no);
+	} else if (regs->int_no < 32) {
+		kprintf("Unhandled interrupt: %s\n", exception_messages[regs->int_no]);
+		kprintf("Error code: %d b%b\n", regs->err_code, regs->err_code);
+		print_cr0();
+		kprintf("int_no: %d\n", regs->int_no);
+		kprintf("EIP: 0x%x\n", regs->eip);
+		kprintf("CS: 0x%x\n", regs->cs);
+		kprintf("EFLAGS: 0x%x\n", regs->eflags);
+		kprintf("ESP: 0x%x\n", regs->useresp);
+		kprintf("SS: %x\n", regs->ss);
+		kprintf("DS: 0x%x\n", regs->ds);
+		kprintf("ES: 0x%x\n", regs->es);
+		kprintf("FS: 0x%x\n", regs->fs);
+		kprintf("GS: 0x%x\n", regs->gs);
+		kprintf("EDI: 0x%x\n", regs->edi);
+		kprintf("ESI: 0x%x\n", regs->esi);
+		kprintf("EBP: 0x%x\n", regs->ebp);
+		kprintf("ESP: 0x%x\n", regs->esp);
+		kprintf("EBX: 0x%x\n", regs->ebx);
+		kprintf("EDX: 0x%x\n", regs->edx);
+		kprintf("ECX: 0x%x\n", regs->ecx);
+		kprintf("EAX: 0x%x\n", regs->eax);
+		kprintf("Stoping the kernel\n");
+		while (1);
 	}
+}
+
+static void disable_interrupts(void)
+{
+	asm("cli");
+}
+
+static void enable_interrupts(void)
+{
+	asm("sti");
 }
 
 void interrupts_init(void)
@@ -80,7 +150,7 @@ void interrupts_init(void)
 	interrupts_set_isr(36, &isr36, flags); // UART com1 and com3
 
 	load_idt_register();
-	asm("sti");
+	enable_interrupts();
 }
 
 void interrupts_set_isr(int n, isr_handler handler, int flags)

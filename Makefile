@@ -2,8 +2,7 @@ CC		:=	gcc
 
 RM		=	rm -rf
 
-BOOT		=	qemu-system-x86_64
-
+BOOT		=	qemu-system-i386
 CFLAGS 		+=	-nostdinc -fno-builtin -m32 -fno-pic
 CFLAGS		+=	-fno-stack-protector
 CFLAGS		+=	-nostdlib -g -Wall

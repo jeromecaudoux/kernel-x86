@@ -30,6 +30,7 @@ typedef unsigned int phys_t;
 #define PDE_PTADDR_TO_VADDR(addr) (SYSTEM_ADDR_BASE + ((addr) << 12))
 #define VADDR_TO_PTADDR(addr) ((unsigned int) addr - (unsigned int) SYSTEM_ADDR_BASE)
 
+// https://wiki.osdev.org/Exceptions#Selector_Error_Code
 typedef struct page_fault_handler {
     // 0 The fault was caused by a non-present page.
     // 1 The fault was caused by a page-level protection violation.

@@ -1,3 +1,28 @@
 http://www.intel.com/content/www/us/en/architecture-and-technology/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.html
 make && make boot
 make DEBUG=1 && make boot
+
+
+# Debug
+make DEBUG=1 && make debug
+gdb kernel-x86 -x debug.gdb
+
+set architecture i386:x86-64
+break <filename>:<linenumber>
+target remote localhost:1234
+
+break switch_to_userland
+break hi
+break hi2
+
+nexti
+c
+
+info all-registers
+p/x cpl
+p/x $eip
+p/x $esp
+p/x $ebp
+x/10xw $esp 
+p/x g_gdt[5]
+disas switch_to_userland

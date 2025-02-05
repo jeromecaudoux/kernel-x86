@@ -43,8 +43,14 @@ void run_debug_test(void)
 {
   // test_kmalloc_sbrk();
   // test_alloc_all_memory();
-  /* test_alloc_frames(); */
-  /* test_dump_screen(); */
+  // test_alloc_frames();
+  // test_dump_screen();
+}
+
+void main_userland(void)
+{
+  while (1);
+  // print_hello_world();
 }
 
 void main_new(void)
@@ -74,6 +80,9 @@ void main_new(void)
   run_debug_test();
 
   sleep(1);
+
+  // init_flat_gdt();
+  switch_to_userland();
 
   print_hello_world();
 }

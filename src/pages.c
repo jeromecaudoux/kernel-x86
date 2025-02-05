@@ -38,8 +38,7 @@ static void page_fault_handler(__attribute__((unused)) struct regs *regs)
     kprintf("--------------------------------------------------\n");
 #endif
 
-    while (1)
-        ;
+    while (1);
 
     if (handler->p == FAULT_NON_PRESENT_PAGE) {
         alloc_frames(1, &frame);
@@ -78,6 +77,7 @@ void *sbrk(ssize_t size)
     struct frame *frames;
     ssize_t nb_pages;
     void *old_kds_end;
+    t_frame_context *fcontext = get_frames_context();
 
     kprintf("sbrk: %d\n", size);
     if (size == 0)
@@ -85,7 +85,7 @@ void *sbrk(ssize_t size)
     if (size > 0) {
         nb_pages = size / FRAME_SIZE + (size % FRAME_SIZE > 0 ? 1 : 0);
 
-        uint32_t max_nb_pages = get_frames_context()->map->base_addr_low + get_frames_context()->map->length_low / FRAME_SIZE;
+        uint32_t max_nb_pages = fcontext->map->base_addr_low + fcontext->map->length_low / FRAME_SIZE;
         uint32_t next_nb_pages = get_kds_size() / FRAME_SIZE + nb_pages;
         // kprintf("get_kds_end_addr(): %p\n", get_kds_end_addr());
         // kprintf("max: %p\n", (void *) max);
@@ -344,7 +344,7 @@ int map_pages(struct frame *pdbr, void *vaddr, struct frame *frames, size_t n, i
     uint16_t pte_cursor;
     size_t cursor = 0;
 
-kprintf("map_pages: vaddr %p, frames %p, n %d, flags %b\n", vaddr, frames, n, flags);
+    // kprintf("map_pages: vaddr %p, frames %p, n %d, flags %b\n", vaddr, frames, n, flags);
     while (cursor < n) {
         pde_cursor = (unsigned long) vaddr / FOUR_MB;
         pte_cursor = ((unsigned long) vaddr - pde_cursor * FOUR_MB) / FRAME_SIZE;
@@ -433,17 +433,18 @@ void unmap_pages(struct frame *pdbr, void *vaddr, int n)
     size_t cursor = 0;
 
     while (cursor < n) {
-        pde_cursor = (unsigned long) vaddr / 0x400000;
-        pte_cursor = ((unsigned long) vaddr - pde_cursor * 0x400000) / 0x1000;
+        pde_cursor = (unsigned long) vaddr / FOUR_MB;
+        pte_cursor = ((unsigned long) vaddr - pde_cursor * FOUR_MB) / FRAME_SIZE;
 
         pde = &(((t_page_directory_entry *) pdbr->vaddr)[pde_cursor]);
         pte = &(((t_page_table_entry *) (PDE_PTADDR_TO_VADDR(pde->_4mb_fields.addr)))[pte_cursor]);
 
         // clear the page table entry
         pte->value = 0x0;
+        __native_flush_tlb_single((unsigned long) pte);
 
         // update vaddr and cursors
-        vaddr = (void *) ((unsigned long) vaddr + 0x1000);
+        vaddr = (void *) ((unsigned long) vaddr + FRAME_SIZE);
         ++cursor;
     }
 }

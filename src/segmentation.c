@@ -1,48 +1,67 @@
 #include "segmentation.h"
 #include "string.h"
+#include "kprintf.h"
 
 static gdt_entry_t		g_gdt[GDT_SIZE];
+static tss_entry_t		g_tss;
 
-int set_gdt_entry(int n, uint32_t base, uint32_t limit, uint8_t access, uint8_t granularity)
+int set_gdt_entry(int n, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran)
 {
 	if (n >= GDT_SIZE)
 		return -1;
-	g_gdt[n].limit_low = limit & 0x0000FFFF;
-	g_gdt[n].base_low = base & 0x00FFFFFF;
+	g_gdt[n].limit_low = limit & 0xffff;
+	g_gdt[n].base_low = base & 0xffff;
+	g_gdt[n].base_mid = (base >> 16) & 0xff;
 	g_gdt[n].access.access = access;
-	g_gdt[n].limit_high = (limit & 0x000F0000) >> 16;
+	g_gdt[n].limit_high = (limit >> 16) & 0xf;
 	g_gdt[n].avl = 0x0;
 	g_gdt[n].l = 0x0;
 	g_gdt[n].d_b = 0x1;
-	g_gdt[n].g = granularity;
-	g_gdt[n].base_high = (base & 0xFF000000) >> 24;
+	g_gdt[n].g = gran; 
+	g_gdt[n].base_high = (base >> 24) & 0xff;
+	kprintf("GDT[%d]: base: %p, limit: %p, access: %x, granularity: %b\n", n, base, g_gdt[n].limit_low, access, gran);
 	return 0;
 }
 
-static void reload_segment_selectors(void) {
-        asm volatile ("movw $0x10, %ax \n"
-                      "movw %ax, %ds \n"
-                      "movw %ax, %es \n"
-                      "movw %ax, %fs \n"
-                      "movw %ax, %gs \n"
-                      "movw %ax, %ss \n");
+int set_tss_entry(int n, uint16_t ss0, uint32_t esp0)
+{
+	if (n >= GDT_SIZE)
+		return -1;
+	uint32_t base = (uint32_t) &g_tss;
+	uint32_t limit =  base + sizeof(tss_entry_t);
 
-        asm volatile ("pushl $0x08 \n"
-                      "pushl $1f \n"
-                      "lret \n"
-                      "1:");
+	set_gdt_entry(n, base, limit, 0xe9, 0x0);
+	memset(&g_tss, 0, sizeof(tss_entry_t));
+	g_tss.ss0 = ss0;
+	g_tss.esp0 = esp0;
+	g_tss.cs = 0x08 | 0x3;
+	g_tss.ss = g_tss.ds = g_tss.es = g_tss.fs = g_tss.gs = 0x10 | 0x3;
+	kprintf("TSS: base: %p, limit: %p, ss0: %p, esp0: %p\n", base, limit, ss0, esp0);
+	// kprintf("sizeof(g_tss) %d, limithigh %p, limitlow %pn", sizeof(g_tss), g_gdt[5].limit_high, g_gdt[5].limit_low);
+	return 0;
+}
+
+
+/*
+ * This function is used to set the tss's esp, so that CPU knows what esp the kernel should be using
+ * */
+void tss_set_esp(uint32_t esp0) {
+    g_tss.esp0 = esp0;
+}
+
+static void reload_segment_selectors(void) {
+	gdt_flush(&g_gdt);
+	tss_flush();
 }
 
 static void load_gdt_register(void) {
 	gdt_register_t gdt_register;
 
-	gdt_register.base = (uint32_t)g_gdt;
-	gdt_register.limit = sizeof(g_gdt) - 1;
+	gdt_register.base = (uint32_t) &g_gdt;
+	gdt_register.limit = (sizeof(gdt_entry_t) * GDT_SIZE) - 1;
 
-	__asm__ volatile("lgdt %0\n"
-			 : /* no output */
-			 : "m" (gdt_register)
-			 : "memory");
+	gdt_flush(&gdt_register);
+	tss_flush();	 
 }
 
 void init_flat_gdt(void)
@@ -61,6 +80,18 @@ void init_flat_gdt(void)
 	access = DPB_DATA_RW | RING_LVL_0 | SEG_PRESENT | DTYPE_CODE_OR_DATA;
 	set_gdt_entry(2, SEGMENT_BASE, SEGMENT_LIMIT, access, GRANULARITY_ENABLE);
 
+	/* Userland Code segment */
+	access = DPB_CODE_ER | RING_LVL_3 | SEG_PRESENT | DTYPE_CODE_OR_DATA;
+	set_gdt_entry(3, SEGMENT_BASE, SEGMENT_LIMIT, access, GRANULARITY_ENABLE);
+
+	/* Userland Data segment */
+	access = DPB_DATA_RW | RING_LVL_3 | SEG_PRESENT | DTYPE_CODE_OR_DATA;
+	set_gdt_entry(4, SEGMENT_BASE, SEGMENT_LIMIT, access, GRANULARITY_ENABLE);
+
+
+    uint32_t esp;
+    asm volatile("mov %%esp, %0" : "=r"(esp));
+	set_tss_entry(5, 0x10, esp);
+
 	load_gdt_register();
-	reload_segment_selectors();
 }

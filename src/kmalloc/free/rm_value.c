@@ -48,10 +48,10 @@ retv	pagesize_rm_update(t_page_infos	*page_infos,
   if (nb_pages > 0)
     {
       if (sbrk(-(nb_pages * getpagesize())) == (void *)-1)
-	{
-	  kprintf(ERROR_SBRK_MSG);
-	  return (FAILED);
-	}
+      {
+        kprintf(ERROR_SBRK_MSG);
+        return (FAILED);
+      }
       page_infos->nb_pages -= nb_pages;
       page_infos->max_pos = mem_infos;
     }
@@ -69,15 +69,15 @@ void		mem_rm_value(void *ptr)
   last = mem_infos;
   while (mem_infos && mem_infos < (t_mem_infos *)(page_infos->max_pos))
     {
-      if (mem_infos->begin == ptr)
-	{
-	  mem_infos = merge_freed_ptr(page_infos, mem_infos, last);
-	  mem_infos->is_free = TRUE;
-	  mem_infos->begin = (t_mem_infos *)((char *)mem_infos + sizeof(t_mem_infos));
-	  mem_infos->next = (t_mem_infos *)((char *)mem_infos->begin + mem_infos->size);
-	  pagesize_rm_update(page_infos, mem_infos);
-	  return ;
-	}
+      if (mem_infos->begin == ptr) 
+      {
+        mem_infos = merge_freed_ptr(page_infos, mem_infos, last);
+        mem_infos->is_free = TRUE;
+        mem_infos->begin = (t_mem_infos *)((char *)mem_infos + sizeof(t_mem_infos));
+        mem_infos->next = (t_mem_infos *)((char *)mem_infos->begin + mem_infos->size);
+        pagesize_rm_update(page_infos, mem_infos);
+        return ;
+      }
       last = mem_infos;
       mem_infos = mem_infos->next;
     }

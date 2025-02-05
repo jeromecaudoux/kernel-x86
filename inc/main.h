@@ -41,6 +41,7 @@ typedef struct	s_kfs_context
 }		t_kfs_context;
 
 void	printk(const char *string);
+void postul();
 void	main_new();
 extern void enable_paging();
 
